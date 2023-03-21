@@ -11,7 +11,7 @@
       "skipFiles": [
         "<node_internals>/**"
       ],
-      "program": "${workspaceFolder}\\hours_per_week_calculator.js"
+      "program": "${workspaceFolder}\\hours_per_week_calculator_db_backed.js"
     }
   ]
 }

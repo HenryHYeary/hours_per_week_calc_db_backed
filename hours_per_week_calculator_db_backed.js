@@ -3,7 +3,6 @@ const morgan = require("morgan");
 const flash = require("express-flash");
 const session = require("express-session");
 const { body, validationResult } = require("express-validator");
-const Strategy = require('./lib/strategies');
 const store = require("connect-loki");
 const SessionPersistence = require("./lib/session-persistence");
 
@@ -35,18 +34,6 @@ app.use(session({
 
 app.use(flash());
 
-// app.use((req, res, next) => {
-//   let strats = [];
-//   if ("strats" in req.session) {
-//     req.session.strats.forEach(strat => {
-//       strats.push(Strategy.makeStrategy(strat));
-//     });
-//   }
-
-//   req.session.strats = strats;
-//   next();
-// });
-
 app.use((req, res, next) => {
   res.locals.store = new SessionPersistence(req.session);
   next();
@@ -57,19 +44,6 @@ app.use((req, res, next) => {
   delete req.session.flash;
   next();
 });
-
-// const loadStrategy = (stratId, strats) => {
-//   return strats.find(strat => strat.id === stratId);
-// }
-
-const deleteStrategy = (stratId, strats) => {
-  let strat = res.locals.store.loadStrategy(stratId, strats);
-  if (!strat) return false;
-  let stratIndex = strats.indexOf(strat);
-
-  strats.splice(stratIndex, 1);
-  return true;
-}
 
 app.get("/", (req, res) => {
   res.redirect("/strategies");
@@ -92,12 +66,7 @@ app.post("/strategies",
       .isLength({ min: 1 })
       .withMessage("The list title is required.")
       .isLength({ max: 100 })
-      .withMessage("List title must be between 1 and 100 characters.")
-      .custom((title, { req }) => {
-        let duplicate = req.session.strats.find(strat => strat.title === title);
-        return duplicate === undefined;
-      })
-      .withMessage("List title must be unique."),
+      .withMessage("List title must be between 1 and 100 characters."),
     body("startDate")
       .trim()
       .isLength({ min: 1 })
@@ -124,18 +93,28 @@ app.post("/strategies",
       .withMessage("Days planned to work per week must be a positive integer between 1 and 7.")
   ],
   (req, res) => {
+    let { stratTitle, targetDate, startDate, hoursLeft, vacationDays, daysToWork } = req.body;
+    let store = res.locals.store;
+
+    const rerenderNewStrat = () => {
+      res.render("new-strategy", {
+        stratTitle,
+        targetDate,
+        startDate,
+        hoursLeft,
+        vacationDays,
+        daysToWork,
+        flash: req.flash(),
+      })
+    }
+
     let errors = validationResult(req);
     if (!errors.isEmpty()) {
       errors.array().forEach(message => req.flash("error", message.msg));
-      res.render("new-strategy", {
-        flash: req.flash(),
-        stratTitle: req.body.stratTitle,
-        targetDate: req.body.targetDate,
-        startDate: req.body.startDate,
-        hoursLeft: req.body.hoursLeft,
-        vacationDays: req.body.vacationDays,
-        daysToWork: req.body.daysToWork,
-      });
+      rerenderNewStrat();
+    } else if (store.matchingStratTitle(req.body.stratTitle)) {
+      req.flash("error", "The strategy title must be unique.");
+      rerenderNewStrat();
     } else {
       let body = req.body;
       let argArr = [
@@ -146,10 +125,13 @@ app.post("/strategies",
         Number(body.vacationDays),
         Number(body.daysToWork),
       ];
-      let strat = new Strategy(...argArr);
-      req.session.strats.push(Strategy.makeStrategy(strat));
-      req.flash("success", "The strategy has been created.");
-      res.redirect("/strategies");
+      let created = res.locals.store.createStrategy(...argArr);
+      if (!created) {
+        next(new Error("Failed to create new strategy."));
+      } else {
+        req.flash("success", "The strategy has been created.");
+        res.redirect("/strategies");
+      }
     }
 });
 
@@ -160,7 +142,7 @@ app.get("/strategies/:stratId", (req, res, next) => {
   if (!strat) {
     next(new Error("Not found."));
   } else {
-    res.locals.store.setHoursNeededPerDay(strat);
+    res.locals.store.setHoursNeededPerDay(+stratId);
     res.render("strategy", {
       strat,
     });
@@ -195,12 +177,7 @@ app.post("/strategies/:stratId/edit",
       .isLength({ min: 1 })
       .withMessage("The list title is required.")
       .isLength({ max: 100 })
-      .withMessage("List title must be between 1 and 100 characters.")
-      .custom((title, { req }) => {
-        let duplicate = req.session.strats.find(strat => strat.title === title);
-        return duplicate === undefined;
-      })
-      .withMessage("List title must be unique."),
+      .withMessage("List title must be between 1 and 100 characters."),
     body("startDate")
       .trim()
       .isLength({ min: 1 })
@@ -228,23 +205,34 @@ app.post("/strategies/:stratId/edit",
   ],
   (req, res, next) => {
     let stratId = req.params.stratId;
-    let strat = res.locals.store.loadStrategy(+stratId, req.session.strats);
-    if (!strat) next(new Error("Not found."));
-    let body = req.body;
-    let { stratTitle, startDate, targetDate, hoursLeft, vacationDays, daysToWork } = body;
+    let { stratTitle, startDate, targetDate, hoursLeft, vacationDays, daysToWork } = req.body;
+    let store = res.locals.store;
+
+    rerenderEditStrat = () => {
+      let strat = store.loadStrategy(+stratId);
+      if (!strat) {
+        next(new Error("Not found."));
+      } else {
+        res.render("edit-strategy", {
+          strat,
+          stratTitle,
+          targetDate,
+          startDate,
+          hoursLeft,
+          vacationDays,
+          daysToWork,
+          flash: req.flash(),
+        });
+      }
+    };
+
     let errors = validationResult(req);
     if (!errors.isEmpty()) {
       errors.array().forEach(message => req.flash("error", message.msg));
-      res.render("edit-strategy", {
-        flash: req.flash(),
-        strat,
-        stratTitle,
-        targetDate,
-        startDate,
-        hoursLeft,
-        vacationDays,
-        daysToWork,
-      });
+      rerenderEditStrat();
+    } else if (store.matchingStratTitle(stratTitle)) {
+      req.flash("error", "The list title must be unique.");
+      rerenderEditStrat();
     } else {
       res.locals.store.setStratTitle(+stratId, stratTitle);
       res.locals.store.setStartDate(+stratId, startDate);
