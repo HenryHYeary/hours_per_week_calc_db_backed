@@ -1,0 +1,27 @@
+extends layout
+
+block main
+  section#strategy
+    header
+      h2 Strategy Details
+
+      dt Strategy Name:
+        dd=strat.stratTitle
+      dt Start Date:
+        dd=strat.stringStartDate
+      dt Target Date:
+        dd=strat.stringTargetDate
+      dt Hours Left:
+        dd=strat.hoursLeft
+      dt Vacation Days:
+        dd=strat.vacationDays
+      dt Days to Work Per Week:
+        dd=strat.daysToWork
+      
+      h3="Hours per Day Needed to Make Goal: " + strat.hoursPerDay
+
+      form(action=`/strategies/${strat.id}/edit` method="get")
+        button.edit(type="submit") Edit Strategy
+      
+      fieldset.actions
+        a(href="/strategies") Back to Strategy List

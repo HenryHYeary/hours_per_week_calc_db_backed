@@ -1,0 +1,65 @@
+extends layout 
+
+block main
+  section#strats 
+    header
+      h2="Editing " + strat.stratTitle
+      ul
+        li
+          form.delete(action=`/strategies/${strat.id}/destroy` method="post")
+            button.delete(type="submit") Delete Strategy
+
+  form(action=`/strategies/${strat.id}/edit` method="post")
+    dl
+      dt
+        label(for="stratTitle") Enter the new name for your new strategy:
+      dd
+        input(type="text"
+              id="stratTitle"
+              name="stratTitle"
+              placeholder="Strategy Title"
+              value=stratTitle || strat.stratTitle)
+      dt 
+        label(for="startDate") Enter your new starting date.
+      dd
+        input(type="text"
+              id="startDate"
+              name="startDate"
+              placeholder="YYYY/MM/DD"
+              value=startDate || strat.stringStartDate)
+      dt
+        label(for="targetDate") Enter your new target date to finish Core: 
+      dd
+        input(type="text"
+              id="targetDate"
+              name="targetDate"
+              placeholder="YYYY/MM/DD"
+              value=targetDate || strat.stringTargetDate)
+      dt
+        label(for="hoursLeft") Enter the number of hours you have left to finish Core (average total for all of Core is 1200 hours):
+      dd
+        input(type="text"
+              id="hoursLeft"
+              name="hoursLeft"
+              placeholder="Hours Left"
+              value=hoursLeft || strat.hoursLeft)
+      dt
+        label(for="vacationDays") Enter the number of vacation days you plan on taking:
+      dd
+        input(type="text"
+              id="vacationDays"
+              name="vacationDays"
+              placeholder="Vacation Days"
+              value=vacationDays || strat.vacationDays)
+      dt
+        label(for="daysToWork") Enter the number of days you plan on working per week:
+      dd
+        input(type="text"
+              id="daysToWork"
+              name="daysToWork"
+              placeholder="Days to Work Per Week"
+              value=daysToWork || strat.daysToWork)
+
+      fieldset.actions
+        input(type="submit" value="Save")
+        a(href="/strategies") Cancel

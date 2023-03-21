@@ -1,0 +1,57 @@
+extends layout
+
+block main
+  form(action="/strategies" method="post")
+    dl
+      dt
+        label(for="stratTitle") Enter the name for your new strategy:
+      dd
+        input(type="text"
+              id="stratTitle"
+              name="stratTitle"
+              placeholder="Strategy Title"
+              value=stratTitle)
+      dt 
+        label(for="startDate") Enter your starting date.
+      dd
+        input(type="text"
+              id="startDate"
+              name="startDate"
+              placeholder="YYYY/MM/DD"
+              value=startDate)
+      dt
+        label(for="targetDate") Enter your target date to finish Core: 
+      dd
+        input(type="text"
+              id="targetDate"
+              name="targetDate"
+              placeholder="YYYY/MM/DD"
+              value=targetDate)
+      dt
+        label(for="hoursLeft") Enter the number of hours you have left to finish Core (average total for all of Core is 1200 hours):
+      dd
+        input(type="text"
+              id="hoursLeft"
+              name="hoursLeft"
+              placeholder="Hours Left"
+              value=hoursLeft)
+      dt
+        label(for="vacationDays") Enter the number of vacation days you plan on taking:
+      dd
+        input(type="text"
+              id="vacationDays"
+              name="vacationDays"
+              placeholder="Vacation Days"
+              value=vacationDays)
+      dt
+        label(for="daysToWork") Enter the number of days you plan on working per week:
+      dd
+        input(type="text"
+              id="daysToWork"
+              name="daysToWork"
+              placeholder="Days to Work Per Week"
+              value=daysToWork)
+
+      fieldset.actions
+        input(type="submit" value="Save")
+        a(href="/strategies") Cancel
