@@ -6,19 +6,19 @@ block main
       h2 Strategy Details
 
       dt Strategy Name:
-        dd=strat.stratTitle
+        dd=strat.stratTitle || strat.strat_title
       dt Start Date:
-        dd=strat.stringStartDate
+        dd=strat.stringStartDate || strat.string_start_date
       dt Target Date:
-        dd=strat.stringTargetDate
+        dd=strat.stringTargetDate || strat.string_target_date
       dt Hours Left:
-        dd=strat.hoursLeft
+        dd=strat.hoursLeft || strat.hours_left
       dt Vacation Days:
-        dd=strat.vacationDays
+        dd=strat.vacationDays || strat.vacation_days
       dt Days to Work Per Week:
-        dd=strat.daysToWork
+        dd=strat.daysToWork || strat.days_to_work
       
-      h3="Hours per Day Needed to Make Goal: " + strat.hoursPerDay
+      h3="Hours per Day Needed to Make Goal: " + (strat.hoursPerDay || strat.hours_per_day)
 
       form(action=`/strategies/${strat.id}/edit` method="get")
         button.edit(type="submit") Edit Strategy

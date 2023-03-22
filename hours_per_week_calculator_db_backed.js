@@ -4,7 +4,12 @@ const flash = require("express-flash");
 const session = require("express-session");
 const { body, validationResult } = require("express-validator");
 const store = require("connect-loki");
-const SessionPersistence = require("./lib/session-persistence");
+// const SessionPersistence = require("./lib/session-persistence");
+const PgPersistence = require("./lib/pg-persistence");
+const catchError = require("./lib/catch-error");
+
+// change property names in views when switching between session persistence
+// and pg persistence to ensure the page displays correctly. More info found in modules and in README.
 
 const app = express();
 const host = "localhost";
@@ -35,9 +40,9 @@ app.use(session({
 app.use(flash());
 
 app.use((req, res, next) => {
-  res.locals.store = new SessionPersistence(req.session);
+  res.locals.store = new PgPersistence(req.session);
   next();
-})
+});
 
 app.use((req, res, next) => {
   res.locals.flash = req.session.flash;
@@ -49,16 +54,32 @@ app.get("/", (req, res) => {
   res.redirect("/strategies");
 })
 
-app.get("/strategies", (req, res) => {
+// Render strategy list sorted alphabetically
+app.get("/strategies", catchError(async (req, res) => {
     res.render("strategies", {
-      strats: res.locals.store.getSortedStrategies()
+      strats: await res.locals.store.getSortedStrategies()
     });
-});
+  })
+);
 
 app.get("/strategies/new", (req, res) => {
   res.render("new-strategy");
 });
 
+// Render individual strategy
+app.get("/strategies/:stratId", 
+  catchError(async (req, res) => {
+    let stratId = req.params.stratId;
+    let strat = await res.locals.store.loadStrategy(+stratId);
+    if (!strat) throw new Error("Not found.");
+    await res.locals.store.setHoursNeededPerDay(+stratId);
+    res.render("strategy", {
+      strat,
+    });
+  })
+);
+
+// Create new strategy
 app.post("/strategies",
   [
     body("stratTitle")
@@ -92,11 +113,11 @@ app.post("/strategies",
       .isInt({ min: 1, max: 7 })
       .withMessage("Days planned to work per week must be a positive integer between 1 and 7.")
   ],
-  (req, res) => {
+  catchError(async (req, res) => {
     let { stratTitle, targetDate, startDate, hoursLeft, vacationDays, daysToWork } = req.body;
     let store = res.locals.store;
 
-    const rerenderNewStrat = () => {
+    const rerenderNewStrat = async () => {
       res.render("new-strategy", {
         stratTitle,
         targetDate,
@@ -112,7 +133,7 @@ app.post("/strategies",
     if (!errors.isEmpty()) {
       errors.array().forEach(message => req.flash("error", message.msg));
       rerenderNewStrat();
-    } else if (store.matchingStratTitle(req.body.stratTitle)) {
+    } else if (await store.matchingStratTitle(req.body.stratTitle)) {
       req.flash("error", "The strategy title must be unique.");
       rerenderNewStrat();
     } else {
@@ -125,59 +146,43 @@ app.post("/strategies",
         Number(body.vacationDays),
         Number(body.daysToWork),
       ];
-      let created = res.locals.store.createStrategy(...argArr);
-      if (!created) {
-        next(new Error("Failed to create new strategy."));
-      } else {
-        req.flash("success", "The strategy has been created.");
-        res.redirect("/strategies");
-      }
+      let created = await res.locals.store.createStrategy(...argArr);
+      if (!created) throw new Error ("Failed to create new strategy.")
+      let stratId = await store.findIdByTitle(stratTitle);
+      setTimeout(() => {
+        store.setHoursNeededPerDay(+stratId);
+      }, 20);
+      await store.setHoursNeededPerDay(+stratId);
+      req.flash("success", "The strategy has been created.");
+      res.redirect("/strategies");
     }
-});
+  })
+);
 
-app.get("/strategies/:stratId", (req, res, next) => {
-  let stratId = req.params.stratId;
-  let strat = res.locals.store.loadStrategy(+stratId, req.session.strats);
-  // strat.setHoursNeededPerDay();
-  if (!strat) {
-    next(new Error("Not found."));
-  } else {
-    res.locals.store.setHoursNeededPerDay(+stratId);
-    res.render("strategy", {
-      strat,
-    });
-  }
-});
-
-app.get("/strategies/:stratId/edit", (req, res, next) => {
-  let stratId = req.params.stratId;
-  let strat = res.locals.store.loadStrategy(+stratId, req.session.strats);
-  if (!strat) {
-    next(new Error("Not found."));
-  } else {
+// Render edit strategy page
+app.get("/strategies/:stratId/edit", 
+  catchError(async(req, res, next) => {
+    let stratId = req.params.stratId;
+    let strat = await res.locals.store.loadStrategy(+stratId);
+    if (!strat) throw new Error("Not found.");
     res.render("edit-strategy", { strat });
-  }
-});
+  })
+);
 
-app.post("/strategies/:stratId/destroy", (req, res, next) => {
-  let stratId = req.params.stratId;
-  let deleted = res.locals.store.deleteStrategy(+stratId, req.session.strats);
-  if (!deleted) {
-    next(new Error("Not found."));
-  } else {
+// Delete strategy
+app.post("/strategies/:stratId/destroy", 
+  catchError(async (req, res) => {
+    let stratId = req.params.stratId;
+    let deleted = await res.locals.store.deleteStrategy(+stratId);
+    if (!deleted) throw new Error("Not found.");
     req.flash("success", "Strategy deleted.");
     res.redirect("/strategies");
-  }
-});
+  })
+);
 
+// Edit strategy
 app.post("/strategies/:stratId/edit",
   [
-    body("stratTitle")
-      .trim()
-      .isLength({ min: 1 })
-      .withMessage("The list title is required.")
-      .isLength({ max: 100 })
-      .withMessage("List title must be between 1 and 100 characters."),
     body("startDate")
       .trim()
       .isLength({ min: 1 })
@@ -203,19 +208,18 @@ app.post("/strategies/:stratId/edit",
       .isInt({ min: 1, max: 7 })
       .withMessage("Days planned to work per week must be a positive integer between 1 and 7.")
   ],
-  (req, res, next) => {
+  catchError(async(req, res, next) => {
     let stratId = req.params.stratId;
-    let { stratTitle, startDate, targetDate, hoursLeft, vacationDays, daysToWork } = req.body;
+    let { startDate, targetDate, hoursLeft, vacationDays, daysToWork } = req.body;
     let store = res.locals.store;
 
-    rerenderEditStrat = () => {
+    rerenderEditStrat = async () => {
       let strat = store.loadStrategy(+stratId);
       if (!strat) {
         next(new Error("Not found."));
       } else {
         res.render("edit-strategy", {
           strat,
-          stratTitle,
           targetDate,
           startDate,
           hoursLeft,
@@ -229,22 +233,20 @@ app.post("/strategies/:stratId/edit",
     let errors = validationResult(req);
     if (!errors.isEmpty()) {
       errors.array().forEach(message => req.flash("error", message.msg));
-      rerenderEditStrat();
-    } else if (store.matchingStratTitle(stratTitle)) {
-      req.flash("error", "The list title must be unique.");
-      rerenderEditStrat();
+      await rerenderEditStrat();
     } else {
-      res.locals.store.setStratTitle(+stratId, stratTitle);
-      res.locals.store.setStartDate(+stratId, startDate);
-      res.locals.store.setTargetDate(+stratId, targetDate);
-      res.locals.store.setHoursLeft(+stratId, Number(hoursLeft));
-      res.locals.store.setVacationDays(+stratId, Number(vacationDays));
-      res.locals.store.setDaysToWork(+stratId, Number(daysToWork));
-      res.locals.store.setHoursNeededPerDay(+stratId);
+      let updated = await res.locals.store.setStartDate(+stratId, startDate);
+      if (!updated) throw new Error("Not found.");
+      await res.locals.store.setTargetDate(+stratId, targetDate);
+      await res.locals.store.setHoursLeft(+stratId, Number(hoursLeft));
+      await res.locals.store.setVacationDays(+stratId, Number(vacationDays));
+      await res.locals.store.setDaysToWork(+stratId, Number(daysToWork));
+      await store.setHoursNeededPerDay(+stratId);
       req.flash("success", "The strategy has been updated.");
       res.redirect(`/strategies/${stratId}`);
     }
-});
+  })
+);
 
 app.use((err, req, res, _next) => {
   console.log(err);

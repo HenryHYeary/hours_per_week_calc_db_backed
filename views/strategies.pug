@@ -8,7 +8,7 @@ block main
       each strat in strats
         li(class=strat)
           a(href=`/strategies/${strat.id}`)
-            h2=strat.stratTitle
+            h2=strat.stratTitle || strat.strat_title
 
 block headerLinks
   .actions
