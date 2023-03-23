@@ -8,7 +8,7 @@ const store = require("connect-loki");
 const PgPersistence = require("./lib/pg-persistence");
 const catchError = require("./lib/catch-error");
 
-// change property names in views when switching between session persistence
+// change property names in edit-list view when switching between session persistence
 // and pg persistence to ensure the page displays correctly. More info found in modules and in README.
 
 const app = express();
@@ -235,8 +235,7 @@ app.post("/strategies/:stratId/edit",
       errors.array().forEach(message => req.flash("error", message.msg));
       await rerenderEditStrat();
     } else {
-      let updated = await res.locals.store.setStartDate(+stratId, startDate);
-      if (!updated) throw new Error("Not found.");
+      await res.locals.store.setStartDate(+stratId, startDate);
       await res.locals.store.setTargetDate(+stratId, targetDate);
       await res.locals.store.setHoursLeft(+stratId, Number(hoursLeft));
       await res.locals.store.setVacationDays(+stratId, Number(vacationDays));
